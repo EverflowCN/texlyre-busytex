@@ -32,6 +32,8 @@ export interface CompileOptions {
     remoteEndpoint?: string;
     shellEscape?: boolean;
     shellHandlerScripts?: string[];
+    /** Optional per-document worker timeout; defaults to 180 seconds (clamped to 30s–15min). */
+    compileTimeoutMs?: number;
 }
 
 export interface FileInput {
