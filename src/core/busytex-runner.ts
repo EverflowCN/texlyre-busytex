@@ -224,7 +224,8 @@ export class BusyTexRunner {
         dataPackagesJs: string[] | null = null,
         remoteEndpoint?: string,
         shellEscape: boolean = false,
-        shellHandlerScripts: string[] = []
+        shellHandlerScripts: string[] = [],
+        compileTimeoutMs?: number
     ): Promise<CompileResult> {
         if (!this.initialized) {
             throw new Error('BusyTeX not initialized. Call initialize() first.');
@@ -235,7 +236,7 @@ export class BusyTexRunner {
         const busytexFiles = this.convertFilesToBusyTexFormat(files);
 
         if (this.worker) {
-            return this.compileWithWorker(busytexFiles, mainTexPath, bibtex, biber, makeindex, rerun, verbose, driver, dataPackagesJs, remoteEndpoint, shellEscape, shellHandlerScripts);
+            return this.compileWithWorker(busytexFiles, mainTexPath, bibtex, biber, makeindex, rerun, verbose, driver, dataPackagesJs, remoteEndpoint, shellEscape, shellHandlerScripts, compileTimeoutMs);
         } else {
             return this.compileDirect(busytexFiles, mainTexPath, bibtex, biber, makeindex, rerun, verbose, driver, dataPackagesJs, remoteEndpoint, shellEscape);
         }
@@ -253,7 +254,8 @@ export class BusyTexRunner {
         dataPackagesJs: string[] | null,
         remoteEndpoint?: string,
         shellEscape: boolean = false,
-        shellHandlerScripts: string[] = []
+        shellHandlerScripts: string[] = [],
+        compileTimeoutMs?: number
     ): Promise<CompileResult> {
         return new Promise((resolve, reject) => {
             if (!this.worker) {
@@ -261,9 +263,21 @@ export class BusyTexRunner {
                 return;
             }
 
+            // BusyTeX can take longer than three minutes for large CJK
+            // documents (e.g. Everflow Exam/Book/Public with full TeX Live).
+            // Preserve the ordinary 180s default; only larger projects opt in
+            // to an extended, bounded deadline.
+            const duration = Number.isFinite(compileTimeoutMs)
+                ? Math.min(900000, Math.max(30000, compileTimeoutMs as number))
+                : 180000;
             const timeout = setTimeout(() => {
-                reject(new Error('Compilation timeout'));
-            }, 180000);
+                // Terminate the worker after a timeout to prevent stale results
+                // leaking into a later compile or exhausting browser memory.
+                this.worker?.terminate();
+                this.worker = null;
+                this.initialized = false;
+                reject(new Error('Compilation timeout after ' + Math.round(duration / 1000) + ' seconds'));
+            }, duration);
 
             const startCompile = () => {
                 this.worker!.postMessage({
