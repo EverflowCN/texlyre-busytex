@@ -55,7 +55,8 @@ export abstract class BaseTool {
             options.dataPackagesJs ?? null,
             options.remoteEndpoint,
             options.shellEscape ?? false,
-            options.shellHandlerScripts ?? []
+            options.shellHandlerScripts ?? [],
+            options.compileTimeoutMs
         );
     }
 
